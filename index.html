@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Нон Стоп Отчет</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#22c55e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Нон Стоп" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
+    }
+    // Блокира pinch-zoom и double-tap zoom на iOS (игнорира user-scalable=no от iOS 10+)
+    document.addEventListener('touchstart', function(e) {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    let _lastTap = 0;
+    document.addEventListener('touchend', function(e) {
+      const now = Date.now();
+      if (now - _lastTap < 300) e.preventDefault();
+      _lastTap = now;
+    }, { passive: false });
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css?v=20260320">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<!-- Theme toggle -->
+<button class="theme-toggle" onclick="toggleTheme()" title="Смени тема">🌙</button>
+
+<!-- ─── Login Screen ──────────────────────────── -->
+<div id="loginScreen">
+  <h2><i class="fa-solid fa-store"></i> Нон Стоп</h2>
+  <div class="login-card">
+    <input type="email"    id="loginEmail"    placeholder="Имейл адрес">
+    <input type="password" id="loginPassword" placeholder="Парола">
+    <div class="login-btns">
+      <button class="btn-secondary" onclick="loginEmail()">
+        <i class="fa-solid fa-right-to-bracket"></i> Вход
+      </button>
+      <button class="btn-secondary" onclick="registerEmail()">
+        <i class="fa-solid fa-user-plus"></i> Регистрация
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Status bar -->
+<div id="status">⏳ Изчакване за връзка...</div>
+
+<!-- Logout -->
+<div id="logoutArea">
+  <button onclick="logout()">
+    <i class="fa-solid fa-right-from-bracket"></i> Изход
+  </button>
+</div>
+
+<!-- ─── Main App ───────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <!-- ── SCREEN: ADD ────────────────────────── -->
+  <div id="screen-add">
+
+    <!-- Quick stat cards -->
+    <div id="totalSummary"></div>
+
+    <!-- Add form -->
+    <div class="form-section" id="addForm">
+      <div class="form-page-title">
+        <i class="fa-solid fa-plus-circle" style="color:var(--green)"></i>
+        <span id="formTitle">Нов запис</span>
+      </div>
+
+      <!-- Тип: Приход / Разход -->
+      <label class="field-label">💵 Тип</label>
+      <div class="segment">
+        <button type="button" class="segment-btn active-income" id="btnIncome"
+                onclick="setType('Приход')">📈 Приход</button>
+        <button type="button" class="segment-btn" id="btnExpense"
+                onclick="setType('Разход')">📉 Разход</button>
+      </div>
+      <select id="type" class="hidden">
+        <option value="Приход">Приход</option>
+        <option value="Разход">Разход</option>
+      </select>
+
+      <!-- Дата -->
+      <label class="field-label" for="date">📅 Дата</label>
+      <input type="date" id="date">
+
+      <!-- Сума -->
+      <label class="field-label" for="amount">💸 Сума (€)</label>
+      <input type="number" id="amount" min="0" step="0.01" placeholder="0.00">
+
+      <!-- Метод -->
+      <label class="field-label">💳 Метод</label>
+      <div class="pill-row" id="methodPills">
+        <button type="button" class="pill-btn active" data-val="Кеш"   onclick="setPill('method','Кеш',   this)">💰 Кеш</button>
+        <button type="button" class="pill-btn"        data-val="Банка" onclick="setPill('method','Банка', this)">🏦 Банка</button>
+        <button type="button" class="pill-btn"        data-val="Карта" onclick="setPill('method','Карта', this)">💳 Карта</button>
+      </div>
+      <select id="method" class="hidden">
+        <option value="Кеш">Кеш</option>
+        <option value="Банка">Банка</option>
+        <option value="Карта">Карта</option>
+      </select>
+
+      <!-- Магазин -->
+      <label class="field-label">🏬 Магазин</label>
+      <div class="pill-row" id="storePills">
+        <button type="button" class="pill-btn active" data-val="1"          onclick="setPill('store','1',          this)">М1</button>
+        <button type="button" class="pill-btn"        data-val="2"          onclick="setPill('store','2',          this)">М2</button>
+        <button type="button" class="pill-btn"        data-val="КасаКеш"   onclick="setPill('store','КасаКеш',   this)">💰 К.Кеш</button>
+        <button type="button" class="pill-btn"        data-val="КасаБанка" onclick="setPill('store','КасаБанка', this)">🏦 К.Банка</button>
+      </div>
+      <select id="store" class="hidden">
+        <option value="1">Магазин 1</option>
+        <option value="2">Магазин 2</option>
+        <option value="КасаКеш">Каса Кеш</option>
+        <option value="КасаБанка">Каса Банка</option>
+      </select>
+
+      <!-- Категория -->
+      <label class="field-label" for="category">🏷️ Категория</label>
+      <select id="category" onchange="toggleCustomCategory()">
+        <option>Оборот</option>
+        <option>Стока</option>
+        <option>Заплати</option>
+        <option>Наеми</option>
+        <option>Без ДДС</option>
+        <option>Митко</option>
+        <option>Велко</option>
+        <option>Друго</option>
+        <option value="custom">✏️ Въведи ръчно...</option>
+      </select>
+      <input type="text" id="customCategory" class="hidden" placeholder="Категория..." style="margin-top:8px;">
+
+      <!-- Бележка -->
+      <label class="field-label" for="customNote">📝 Бележка (по желание)</label>
+      <input type="text" id="customNote" placeholder="Бележка..." autocomplete="off">
+      <!-- noteSelect скрит за съвместимост със стари записи -->
+      <select id="noteSelect" class="hidden"><option value="">—</option></select>
+
+      <!-- Снимка -->
+      <label class="field-label">📷 Документ</label>
+      <div class="img-upload-area" onclick="openUploadWidget()">
+        <i class="fa-solid fa-camera"></i>
+        <span>Качи снимка</span>
+      </div>
+      <img id="imagePreview" class="hidden" onclick="openImageModal(this.src)">
+      <button type="button" class="btn-danger hidden" id="removeImgBtn"
+              onclick="removeImage()" style="margin-top:8px; width:100%; min-height:38px; font-size:0.8125rem;">
+        🗑️ Премахни снимка
+      </button>
+
+      <!-- Submit -->
+      <button type="button" class="btn-primary" id="submitBtn" onclick="addRecord()">
+        <i class="fa-solid fa-plus"></i> Добави запис
+      </button>
+      <button type="button" class="btn-amber hidden" id="cancelEditBtn" onclick="cancelEdit()">
+        ✖ Откажи редакция
+      </button>
+    </div>
+
+    <!-- Recent 5 records -->
+    <div style="margin-bottom: 6px;">
+      <div class="recent-title">
+        <i class="fa-solid fa-clock-rotate-left"></i> Последни записи
+      </div>
+      <div id="recentList"></div>
+    </div>
+
+    <!-- Legacy table (hidden, kept for compat) -->
+    <table id="recentTable" class="hidden">
+      <thead><tr><th>Дата</th><th>Тип</th><th>Сума</th><th>Метод</th><th>Магазин</th><th>Кат.</th><th>Бележка</th><th>Действие</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+  </div><!-- /screen-add -->
+
+  <!-- ── SCREEN: REPORTS ────────────────────── -->
+  <div id="screen-report" class="hidden admin-only">
+
+    <div class="report-header">
+      <h2><i class="fa-solid fa-chart-pie" style="color:var(--green)"></i> Отчети</h2>
+    </div>
+
+    <!-- Сравнение table — full width, same as chart -->
+    <div id="liveBalance" class="summary admin-only"></div>
+
+    <!-- Наличности & Данъчна справка accordion -->
+    <div class="summary admin-only">
+      <button class="accordion-btn" onclick="toggleFinancePanel()">
+        <span><i class="fa-solid fa-file-invoice-dollar"></i> Наличности &amp; Данъчна справка</span>
+        <span id="financeArrow" class="accordion-arrow">▾</span>
+      </button>
+      <div id="financePanel" class="hidden">
+        <div id="methodSummaryExtra"></div>
+        <div id="taxSummary"></div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-wrap admin-only">
+      <div class="card-title"><i class="fa-solid fa-chart-bar"></i> Месечен преглед</div>
+      <canvas id="chart"></canvas>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-card admin-only">
+      <div class="card-title"><i class="fa-solid fa-filter"></i> Филтри</div>
+
+      <div class="date-row">
+        <div>
+          <label>От</label>
+          <input type="date" id="startDate" onchange="applyFilters()">
+        </div>
+        <div>
+          <label>До</label>
+          <input type="date" id="endDate" onchange="applyFilters()">
+        </div>
+        <button class="btn-secondary" onclick="setCurrentMonth()" style="min-height:42px; font-size:0.75rem; white-space:nowrap; padding: 0 12px;">
+          📅 Месец
+        </button>
+      </div>
+
+      <div class="filter-grid">
+        <select id="filterType"     onchange="applyFilters()">
+          <option value="">Всички типове</option>
+          <option>Приход</option>
+          <option>Разход</option>
+        </select>
+        <select id="filterMethod"   onchange="applyFilters()">
+          <option value="">Всички методи</option>
+          <option value="Кеш">Кеш</option>
+          <option value="Банка">Банка / Карта</option>
+        </select>
+        <select id="filterCategory" onchange="applyFilters()">
+          <option value="">Всички категории</option>
+          <option>Оборот</option>
+          <option>Стока</option>
+          <option>Заплати</option>
+          <option>Наеми</option>
+          <option>Без ДДС</option>
+          <option>Митко</option>
+          <option>Велко</option>
+          <option>Друго</option>
+        </select>
+        <select id="filterStore"    onchange="applyFilters()">
+          <option value="">Всички магазини</option>
+          <option value="1">🏪 М1</option>
+          <option value="2">🏪 М2</option>
+          <option value="КасаКеш">💰 Каса Кеш</option>
+          <option value="КасаБанка">🏦 Каса Банка</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-secondary" onclick="clearFilters()">
+          <i class="fa-solid fa-xmark"></i> Изчисти
+        </button>
+        <button class="btn-secondary" onclick="printFilteredTable()">
+          <i class="fa-solid fa-print"></i> Принтирай
+        </button>
+        <button class="btn-secondary" onclick="exportFilteredToExcel()" style="color:var(--green);">
+          <i class="fa-solid fa-file-excel"></i> Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter summary -->
+    <div id="filterSummary" class="admin-only" style="display:none;"></div>
+
+    <!-- Records table -->
+    <div class="table-responsive admin-only">
+      <table id="recordsTable">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Тип</th>
+            <th>Сума</th>
+            <th>Метод</th>
+            <th>Магазин</th>
+            <th>Кат.</th>
+            <th>Бележка</th>
+            <th>—</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div><!-- /screen-report -->
+
+
+  <!-- ── SCREEN: NOTES & NOTIFICATIONS ─────── -->
+  <div id="screen-notes" class="hidden">
+
+    <div class="notes-page-title">
+      <i class="fa-solid fa-bell" style="color:var(--amber)"></i>
+      Бележки & Напомняния
+    </div>
+
+    <!-- Push notifications card -->
+    <div class="card" id="notifCard">
+      <div class="card-title">
+        <i class="fa-solid fa-bell"></i> Push напомняния
+      </div>
+      <p class="notes-hint">Получавай напомняне ако до 18:00 ч. няма въведен запис за деня.</p>
+      <div class="notif-row">
+        <div>
+          <div class="notif-label">Напомняне в 18:00</div>
+          <div class="notif-sub" id="notifStatus">Изключено</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="notifToggle" onchange="toggleNotifications(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="notif-row" style="margin-top:10px;">
+        <div>
+          <div class="notif-label">Тест напомняне</div>
+          <div class="notif-sub">Изпрати веднага</div>
+        </div>
+        <button class="btn-secondary" onclick="sendTestNotif()" style="width:auto;min-height:36px;padding:0 14px;font-size:0.8125rem;">
+          <i class="fa-solid fa-paper-plane"></i> Тест
+        </button>
+      </div>
+      <div class="notif-row" style="margin-top:10px;">
+        <div>
+          <div class="notif-label">Тест бележка напомняне</div>
+          <div class="notif-sub" id="testTaskReminderStatus">Изпраща известие за първата бележка с напомняне</div>
+        </div>
+        <button class="btn-secondary" onclick="testTaskReminder()" style="width:auto;min-height:36px;padding:0 14px;font-size:0.8125rem;">
+          <i class="fa-solid fa-bell"></i> Тест
+        </button>
+      </div>
+    </div>
+
+    <!-- Add task -->
+    <div class="card">
+      <div class="card-title">
+        <i class="fa-solid fa-plus"></i> Нова бележка
+      </div>
+
+      <input type="text" id="taskInput" placeholder="Текст на бележката..." maxlength="200"
+             onkeydown="if(event.key==='Enter')addTask()">
+
+      <div class="task-form-row">
+        <select id="taskPriority">
+          <option value="high">🔴 Важно</option>
+          <option value="normal" selected>🟡 Нормално</option>
+          <option value="low">⚫ Ниско</option>
+        </select>
+        <div>
+          <label class="task-form-label">📅 Краен срок</label>
+          <input type="date" id="taskDueDate">
+        </div>
+      </div>
+
+      <div class="task-form-row">
+        <div>
+          <label class="task-form-label">🔔 Напомни на дата</label>
+          <input type="date" id="taskReminderDate">
+        </div>
+        <div>
+          <label class="task-form-label">Час</label>
+          <input type="time" id="taskReminderTime">
+        </div>
+      </div>
+
+      <div id="taskChecklistBuilder"></div>
+      <button type="button" class="btn-secondary task-add-cl-btn" onclick="addChecklistField()">
+        + Добави подзадача
+      </button>
+
+      <button type="button" class="btn-primary" onclick="addTask()" style="margin-top:12px;">
+        <i class="fa-solid fa-plus"></i> Добави бележка
+      </button>
+    </div>
+
+    <!-- Task list -->
+    <div class="card">
+      <div class="card-title">
+        <i class="fa-solid fa-list-check"></i>
+        Бележки
+        <span id="taskCount" class="task-badge">0</span>
+      </div>
+      <div id="taskList">
+        <div class="tasks-empty">Няма бележки — добави първата 👆</div>
+      </div>
+    </div>
+
+  </div><!-- /screen-notes -->
+
+  <!-- ── SCREEN: СОБСТВЕНИЦИ ───────────────────── -->
+  <div id="screen-owners" class="hidden">
+
+    <div class="owners-page-title">
+      <span>👥</span>
+      <span>Собственици</span>
+    </div>
+
+    <!-- Month navigation -->
+    <div class="owners-month-nav">
+      <button class="owners-month-btn" onclick="ownersChangeMonth(-1)">&#8249;</button>
+      <span id="ownersMonthLabel" class="owners-month-label">—</span>
+      <button class="owners-month-btn" onclick="ownersChangeMonth(1)">&#8250;</button>
+    </div>
+
+    <!-- Add form -->
+    <div class="card owners-form-card">
+      <div class="owners-form-title">Нов запис</div>
+      <div class="owners-form-row">
+        <label class="field-label" for="ownerDate">📅 Дата</label>
+        <input type="date" id="ownerDate">
+      </div>
+      <div class="owners-form-row">
+        <label class="field-label" for="ownerAmount">💸 Сума (€)</label>
+        <input type="number" id="ownerAmount" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="owners-form-row">
+        <label class="field-label">👤 Собственик</label>
+        <div class="segment">
+          <button type="button" class="segment-btn active" id="btnMitko"
+                  onclick="document.getElementById('ownerName').value='Митко';
+                           document.getElementById('btnMitko').classList.add('active');
+                           document.getElementById('btnVelko').classList.remove('active');">
+            Митко
+          </button>
+          <button type="button" class="segment-btn" id="btnVelko"
+                  onclick="document.getElementById('ownerName').value='Велко';
+                           document.getElementById('btnVelko').classList.add('active');
+                           document.getElementById('btnMitko').classList.remove('active');">
+            Велко
+          </button>
+        </div>
+        <select id="ownerName" class="hidden">
+          <option value="Митко">Митко</option>
+          <option value="Велко">Велко</option>
+        </select>
+      </div>
+      <div class="owners-form-row">
+        <label class="field-label" for="ownerNote">📝 Бележка</label>
+        <input type="text" id="ownerNote" placeholder="Бележка..." autocomplete="off">
+      </div>
+      <button class="btn-primary owners-submit" onclick="addOwnerEntry()">
+        <i class="fa-solid fa-plus"></i> Добави
+      </button>
+    </div>
+
+    <!-- Митко table -->
+    <div class="card owners-table-card">
+      <div class="owners-table-title owners-name-mitko">💼 Митко</div>
+      <div class="table-responsive">
+        <table class="owners-table">
+          <thead>
+            <tr><th>Дата</th><th>Сума</th><th>Тип</th><th>Бележка</th><th></th></tr>
+          </thead>
+          <tbody id="ownersMitkoBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Велко table -->
+    <div class="card owners-table-card">
+      <div class="owners-table-title owners-name-velko">💼 Велко</div>
+      <div class="table-responsive">
+        <table class="owners-table">
+          <thead>
+            <tr><th>Дата</th><th>Сума</th><th>Тип</th><th>Бележка</th><th></th></tr>
+          </thead>
+          <tbody id="ownersVelkoBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Summary table -->
+    <div class="card owners-table-card">
+      <div class="owners-table-title">📊 Обобщение</div>
+      <div class="table-responsive">
+        <table class="owners-table">
+          <thead>
+            <tr><th></th><th class="owners-name-mitko">Митко</th><th class="owners-name-velko">Велко</th></tr>
+          </thead>
+          <tbody id="ownersSummaryBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /screen-owners -->
+
+</div><!-- /app -->
+
+<!-- ── Bottom Navigation ──────────────────────── -->
+<nav class="bottom-nav hidden" id="bottomNav">
+
+  <button class="nav-btn admin-only" id="navReports" onclick="showScreen('report')">
+    <span class="nav-icon">📊</span>
+    Отчети
+  </button>
+
+  <button class="nav-btn nav-add active" id="navAdd" onclick="showScreen('add')">
+    <span class="nav-icon-wrap">➕</span>
+    Добави
+  </button>
+
+  <button class="nav-btn admin-only" id="navOwners" onclick="showScreen('owners')">
+    <span class="nav-icon">👥</span>
+    Собственици
+  </button>
+
+  <button class="nav-btn" id="navNotes" onclick="showScreen('notes')">
+    <span class="nav-icon">📝</span>
+    Бележки
+  </button>
+
+</nav>
+
+<!-- Image modal -->
+<div id="imageModal" class="hidden">
+  <div>
+    <img id="modalImage" src="" alt="Документ">
+    <button onclick="closeImageModal()">✖</button>
+  </div>
+</div>
+
+<!-- Cloudinary -->
+<script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
+
+<script>
+  /* ── Theme ──────────────────────────────── */
+  function toggleTheme() {
+    const body = document.body;
+    const btn  = document.querySelector('.theme-toggle');
+    const isLight = body.classList.toggle('light');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    btn.textContent = isLight ? '🌗' : '🌙';
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('theme');
+    const btn   = document.querySelector('.theme-toggle');
+    if (saved === 'light') {
+      document.body.classList.add('light');
+      if (btn) btn.textContent = '🌗';
+    }
+  });
+
+  /* ── Pill / Segment helpers ─────────────── */
+  window.setType = function(val) {
+    document.getElementById('type').value = val;
+    document.getElementById('btnIncome').className  = 'segment-btn' + (val==='Приход' ? ' active-income'  : '');
+    document.getElementById('btnExpense').className = 'segment-btn' + (val==='Разход' ? ' active-expense' : '');
+  };
+
+  window.setPill = function(group, val, el) {
+    const selectId = group === 'method' ? 'method' : 'store';
+    document.getElementById(selectId).value = val;
+    const container = el.closest('.pill-row');
+    container.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  };
+
+  /* ── Sync pills → select on load / edit ── */
+  window.syncPills = function() {
+    const method = document.getElementById('method').value;
+    document.querySelectorAll('#methodPills .pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === method);
+    });
+    const store = document.getElementById('store').value;
+    document.querySelectorAll('#storePills .pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === store);
+    });
+    const type = document.getElementById('type').value;
+    setType(type);
+  };
+
+  /* ── Cloudinary ─────────────────────────── */
+  function openUploadWidget() {
+    cloudinary.openUploadWidget(
+      { cloudName:"dh1l7rhn1", uploadPreset:"nonstop", sources:["local","camera"],
+        multiple:false, resourceType:"image", maxFileSize:5000000 },
+      (error, result) => {
+        if (!error && result && result.event === "success") {
+          const url = result.info.secure_url;
+          window.dispatchEvent(new CustomEvent("imageUploaded", { detail: { url } }));
+          const prev = document.getElementById("imagePreview");
+          prev.src = url;
+          prev.classList.remove("hidden");
+          document.getElementById("removeImgBtn").classList.remove("hidden");
+        }
+      }
+    );
+  }
+
+  function removeImage() {
+    window.dispatchEvent(new CustomEvent("imageRemoved"));
+    const prev = document.getElementById("imagePreview");
+    prev.src = ""; prev.classList.add("hidden");
+    document.getElementById("removeImgBtn").classList.add("hidden");
+  }
+
+  /* ── Image modal ───────────────────────── */
+  window.openImageModal  = url => {
+    document.getElementById("modalImage").src = url;
+    document.getElementById("imageModal").classList.remove("hidden");
+  };
+  window.closeImageModal = () => {
+    document.getElementById("imageModal").classList.add("hidden");
+    document.getElementById("modalImage").src = "";
+  };
+</script>
+
+<script type="module" src="main.js?v=20260320"></script>
+
+</body>
+</html>
