@@ -166,10 +166,12 @@ onAuthStateChanged(auth, async user => {
       const snap = await getDoc(SETTINGS_REF);
       if (snap.exists()) {
         appSettings = snap.data();
-        const isAdmin = user.email === appSettings.adminEmail;
+        // Case-insensitive email compare; if adminEmail missing → treat as admin
+        const adminEmail = (appSettings.adminEmail || "").toLowerCase();
+        const isAdmin = !adminEmail || user.email?.toLowerCase() === adminEmail;
         initAppWithSettings(user, isAdmin);
       } else {
-        // No settings yet — show wizard
+        // No settings/config yet — show wizard for first-time setup
         document.getElementById("loginScreen")?.classList.add("hidden");
         document.getElementById("app")?.classList.add("hidden");
         document.getElementById("bottomNav")?.classList.add("hidden");
@@ -177,8 +179,8 @@ onAuthStateChanged(auth, async user => {
       }
     } catch(e) {
       console.error("Settings load error:", e);
-      // Fallback: treat as non-admin
-      initAppWithSettings(user, false);
+      // Firestore error (e.g. permission denied) — treat as admin and continue
+      initAppWithSettings(user, true);
     }
   } else {
     if (statusDiv) statusDiv.textContent = "🔐 Моля, влез с имейл и парола.";
@@ -858,7 +860,7 @@ function updateFilterSummary(data) {
   });
 
   const net = totalInc - totalExp;
-  const f   = n => n.toFixed(2) + " €";
+  const f   = n => n.toFixed(2) + " " + getCurrencySymbol();
   const cls = n => n >= 0 ? "color:var(--green)" : "color:var(--red)";
 
   el.style.display = "block";
@@ -973,7 +975,7 @@ function renderMethodSummary() {
   const msx = document.getElementById("methodSummaryExtra");
   if (!msx) return;
 
-  const fmt = n => Number(n || 0).toFixed(2) + " €";
+  const fmt = n => Number(n || 0).toFixed(2) + " " + getCurrencySymbol();
   const fmtDate = t => t === null ? "—" : new Date(t).toLocaleDateString("bg-BG");
   const row = (l, v) => `<tr><td>${l}</td><td>${v}</td></tr>`;
 
@@ -1074,7 +1076,7 @@ window.showScreen = function(screen) {
     if (!isAdmin) { alert("Нямаш достъп до този екран."); return; }
     reportScreen?.classList.remove("hidden");
     document.getElementById('navReports')?.classList.add('active');
-    renderTable(); renderMethodSummary();
+    renderLiveBalance(); renderTable(); renderMethodSummary();
     renderChart(); applyFilters(); renderTaxSummary();
 
   } else if (screen === "notes") {
@@ -1154,7 +1156,7 @@ function renderTotalSummaryCards() {
 
   const todaySaldo = todayInc - todayExp;
   const monthSaldo = monthInc - monthExp;
-  const f = n => n.toFixed(2) + " €";
+  const f = n => n.toFixed(2) + " " + getCurrencySymbol();
 
   el.innerHTML = `
     <div class="stat-grid">
@@ -1874,6 +1876,22 @@ function wizShowStep(step) {
     document.getElementById(`wizStep${i}`)?.classList.toggle("hidden", i !== step);
   }
 }
+
+// Skip wizard — use defaults, treat as admin
+window.wizSkip = function() {
+  if (!_wizUser) return;
+  const defaultSettings = {
+    businessName: "SmartShop",
+    currency: "EUR",
+    stores: [{ id: "1", name: "Магазин 1" }, { id: "2", name: "Магазин 2" }],
+    owners: [],
+    adminEmail: _wizUser.email,
+    createdAt: new Date().toISOString()
+  };
+  setDoc(SETTINGS_REF, defaultSettings).catch(e => console.warn("Settings save:", e));
+  appSettings = defaultSettings;
+  initAppWithSettings(_wizUser, true);
+};
 
 window.wizSelectCurrency = function(currency, btn) {
   document.getElementById("wizCurrency").value = currency;
