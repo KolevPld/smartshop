@@ -936,11 +936,11 @@ function renderChart() {
       c.save();
       c.textAlign = "center";
       c.textBaseline = "middle";
-      c.fillStyle = "var(--text2, #aaa)";
+      c.fillStyle = "#e2e8f0";
       c.font = "bold 11px sans-serif";
       c.fillText("Салдо", cx, cy - 12);
       c.font = `bold 15px sans-serif`;
-      c.fillStyle = saldoVal >= 0 ? "#4caf50" : "#f44336";
+      c.fillStyle = saldoVal >= 0 ? "#4ade80" : "#f87171";
       c.fillText(fmt(saldoVal), cx, cy + 6);
       c.restore();
     }
@@ -968,14 +968,14 @@ function renderChart() {
         title: {
           display: true,
           text: "Приходи vs Разходи",
-          color: "var(--text1, #eee)",
+          color: "#ffffff",
           font: { size: 14, weight: "bold" },
           padding: { bottom: 10 }
         },
         legend: {
           position: "bottom",
           labels: {
-            color: "var(--text1, #eee)",
+            color: "#ffffff",
             padding: 16,
             font: { size: 13 },
             generateLabels(chart) {
