@@ -984,6 +984,8 @@ function renderChart() {
                 text: `${label}  ${fmt(ds.data[i] < 0.01 ? 0 : ds.data[i])}`,
                 fillStyle: ds.backgroundColor[i],
                 strokeStyle: ds.borderColor[i],
+                fontColor: "#ffffff",
+                color: "#ffffff",
                 lineWidth: 1,
                 index: i
               }));
