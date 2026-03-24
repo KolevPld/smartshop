@@ -290,6 +290,8 @@ async function addRecord() {
   let category = document.getElementById("category")?.value || "";
   if (category === "custom") {
     category = document.getElementById("customCategory")?.value?.trim() || "";
+  } else if (category === "собственик") {
+    category = document.getElementById("ownerSubSelect")?.value?.trim() || "";
   }
 
   if (!date || !type || !method || isNaN(amount) || amount <= 0) {
@@ -367,15 +369,27 @@ window.editImage = async function (id) {
   // Категория
   const catSelect = document.getElementById("category");
   const customCatInput = document.getElementById("customCategory");
+  const ownerSubSel = document.getElementById("ownerSubSelect");
   if (catSelect && customCatInput) {
-    if ([...catSelect.options].some(o => o.value === record.category)) {
+    const isOwnerCat = getOwnerCategories().includes(record.category);
+    if (isOwnerCat) {
+      catSelect.value = "собственик";
+      customCatInput.classList.add("hidden");
+      customCatInput.value = "";
+      if (ownerSubSel) {
+        ownerSubSel.value = record.category;
+        ownerSubSel.classList.remove("hidden");
+      }
+    } else if ([...catSelect.options].some(o => o.value === record.category)) {
       catSelect.value = record.category;
       customCatInput.classList.add("hidden");
       customCatInput.value = "";
+      ownerSubSel?.classList.add("hidden");
     } else {
       catSelect.value = "custom";
       customCatInput.classList.remove("hidden");
       customCatInput.value = record.category || "";
+      ownerSubSel?.classList.add("hidden");
     }
   }
 
@@ -428,6 +442,8 @@ async function saveEditedRecord() {
   let category = document.getElementById("category")?.value || "";
   if (category === "custom") {
     category = document.getElementById("customCategory")?.value?.trim() || "";
+  } else if (category === "собственик") {
+    category = document.getElementById("ownerSubSelect")?.value?.trim() || "";
   }
 
   if (!date || !type || !method || isNaN(amount) || amount <= 0) {
@@ -552,6 +568,7 @@ function clearForm() {
   if (categoryInput) { categoryInput.value = ""; categoryInput.classList.add("hidden"); }
 
   document.getElementById("category") && (document.getElementById("category").value = "Оборот");
+  document.getElementById("ownerSubSelect")?.classList.add("hidden");
   const cn = document.getElementById("customNote"); if (cn) cn.value = "";
 
   uploadedImageUrl = "";
@@ -708,20 +725,27 @@ function renderStorePills() {
 }
 
 function renderOwnerCategoryOptions() {
-  const catSelect    = document.getElementById("category");
   const filterCatSel = document.getElementById("filterCategory");
+  const ownerSub     = document.getElementById("ownerSubSelect");
   const ownerNames   = getOwnerCategories();
 
-  [catSelect, filterCatSel].forEach(sel => {
-    if (!sel) return;
-    sel.querySelectorAll('.owner-cat-opt').forEach(el => el.remove());
-    const drugoOpt = [...sel.options].find(o => o.value === "Друго");
+  // Попълни ownerSubSelect с имената на собствениците
+  if (ownerSub) {
+    ownerSub.innerHTML = ownerNames.length
+      ? ownerNames.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
+      : `<option value="">— Няма настроени собственици —</option>`;
+  }
+
+  // Добави собствениците към filterCategory за филтриране в Отчети
+  if (filterCatSel) {
+    filterCatSel.querySelectorAll('.owner-cat-opt').forEach(el => el.remove());
+    const drugoOpt = [...filterCatSel.options].find(o => o.value === "Друго");
     ownerNames.forEach(name => {
       const opt = document.createElement('option');
       opt.value = name; opt.textContent = name; opt.className = 'owner-cat-opt';
-      if (drugoOpt) sel.insertBefore(opt, drugoOpt); else sel.appendChild(opt);
+      if (drugoOpt) filterCatSel.insertBefore(opt, drugoOpt); else filterCatSel.appendChild(opt);
     });
-  });
+  }
 }
 
 function renderFilterStoreOptions() {
@@ -1037,16 +1061,23 @@ function saveCustomNote(note) {}
 function updateNoteOptions() {}
 
 function toggleCustomCategory() {
-  const select = document.getElementById("category");
-  const input = document.getElementById("customCategory");
+  const select    = document.getElementById("category");
+  const input     = document.getElementById("customCategory");
+  const ownerSub  = document.getElementById("ownerSubSelect");
   if (!select || !input) return;
 
   if (select.value === "custom") {
     input.classList.remove("hidden");
     input.focus();
+    ownerSub?.classList.add("hidden");
+  } else if (select.value === "собственик") {
+    ownerSub?.classList.remove("hidden");
+    input.classList.add("hidden");
+    input.value = "";
   } else {
     input.classList.add("hidden");
     input.value = "";
+    ownerSub?.classList.add("hidden");
   }
 }
 window.toggleCustomCategory = toggleCustomCategory;
